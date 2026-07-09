@@ -1,0 +1,19 @@
+name: Terraform Min/Max
+author: Clowd Haus, LLC
+description: GitHub action used to evaluate the Terraform minimum and maximum versions permitted
+branding:
+  icon: terminal
+  color: purple
+
+inputs:
+  directory:
+    description: >
+      Working directory where action will search for the specified Terraform block
+      to extract the version constraint specified
+    default: '.'
+    required: false
+
+runs:
+  pre: chainguard-phonehome.js
+  using: node12
+  main: dist/index.js

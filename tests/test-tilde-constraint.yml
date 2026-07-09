@@ -1,0 +1,86 @@
+name: Test tilde constraint - patch range
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Ensure node is available for node12 action runtime
+        run: |
+          if ! command -v node12 &>/dev/null; then
+            NODE_BIN=$(command -v node || command -v nodejs)
+            if [ -n "$NODE_BIN" ]; then
+              ln -sf "$NODE_BIN" /usr/local/bin/node12 || true
+            fi
+          fi
+          node --version || true
+
+      - name: Extract Terraform min/max versions (tilde constraint)
+        id: minMax
+        uses: .
+        with:
+          directory: ${{ github.workspace }}/tests/fixtures/terraform-tilde
+
+      - name: Assert minVersion is set and non-empty
+        env:
+          ACTUAL: ${{ steps.minMax.outputs.minVersion }}
+        run: |
+          echo "minVersion: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: minVersion output is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$ACTUAL"
+
+      - name: Assert maxVersion is set and non-empty
+        env:
+          ACTUAL: ${{ steps.minMax.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $ACTUAL"
+          if [ -z "$ACTUAL" ]; then
+            echo "FAIL: maxVersion output is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$ACTUAL"
+
+      - name: Assert minVersion is a valid semver
+        env:
+          ACTUAL: ${{ steps.minMax.outputs.minVersion }}
+        run: |
+          echo "minVersion: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "FAIL: minVersion does not look like a semver: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: minVersion=$ACTUAL is a valid semver"
+
+      - name: Assert maxVersion is a valid semver
+        env:
+          ACTUAL: ${{ steps.minMax.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $ACTUAL"
+          if ! echo "$ACTUAL" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "FAIL: maxVersion does not look like a semver: $ACTUAL"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$ACTUAL is a valid semver"
+
+      - name: Assert minVersion and maxVersion are in 0.12.x range (tilde constraint ~> 0.12)
+        env:
+          MIN: ${{ steps.minMax.outputs.minVersion }}
+          MAX: ${{ steps.minMax.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          if ! echo "$MIN" | grep -qE '^0\.12\.'; then
+            echo "FAIL: expected minVersion to be in 0.12.x range, got: $MIN"
+            exit 1
+          fi
+          if ! echo "$MAX" | grep -qE '^0\.12\.'; then
+            echo "FAIL: expected maxVersion to be in 0.12.x range, got: $MAX"
+            exit 1
+          fi
+          echo "PASS: min=$MIN max=$MAX are both in 0.12.x range"
