@@ -1,0 +1,63 @@
+name: Test basic range constraint
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create Terraform versions file with range constraint
+        run: |
+          mkdir -p tests/fixtures/basic-range
+          cat > tests/fixtures/basic-range/versions.tf << 'EOF'
+          terraform {
+            required_version = ">= 1.3.0, < 1.6.0"
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          directory: tests/fixtures/basic-range
+
+      - name: Assert minVersion is set and non-empty
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set and non-empty
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion is less than maxVersion
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          # Use sort -V to compare semantic versions
+          LOWER=$(printf '%s\n%s\n' "$MIN" "$MAX" | sort -V | head -1)
+          if [ "$LOWER" != "$MIN" ]; then
+            echo "FAIL: expected minVersion ($MIN) to be less than maxVersion ($MAX)"
+            exit 1
+          fi
+          if [ "$MIN" = "$MAX" ]; then
+            echo "FAIL: expected minVersion ($MIN) to differ from maxVersion ($MAX) for a range constraint"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN < maxVersion=$MAX"

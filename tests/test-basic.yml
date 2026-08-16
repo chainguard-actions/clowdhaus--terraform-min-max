@@ -1,0 +1,61 @@
+name: Test basic usage - single lower bound constraint
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - id: action
+        uses: .
+        with:
+          directory: tests/terraform-aws-alb
+
+      - name: Assert minVersion is set
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion satisfies >= 1.5.7
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          # minVersion should be >= 1.5.7 (the constraint is >= 1.5.7)
+          if ! printf '%s\n%s\n' "1.5.7" "$MIN" | sort -V -C; then
+            echo "FAIL: minVersion $MIN is less than 1.5.7"
+            exit 1
+          fi
+          echo "PASS: minVersion $MIN satisfies >= 1.5.7"
+
+      - name: Assert maxVersion >= minVersion
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          if ! printf '%s\n%s\n' "$MIN" "$MAX" | sort -V -C; then
+            echo "FAIL: maxVersion $MAX is less than minVersion $MIN"
+            exit 1
+          fi
+          echo "PASS: maxVersion $MAX >= minVersion $MIN"

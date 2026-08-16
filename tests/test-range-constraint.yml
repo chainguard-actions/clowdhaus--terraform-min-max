@@ -1,0 +1,62 @@
+name: Test range constraint - >= X, < Y
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # tests/0.13/versions.tf has: required_version = ">= 0.13.1, < 0.14"
+      - id: action
+        uses: .
+        with:
+          directory: tests/0.13
+
+      - name: Assert minVersion is set
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion is 0.13.1
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ "$MIN" != "0.13.1" ]; then
+            echo "FAIL: expected minVersion=0.13.1, got $MIN"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is less than 0.14
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          # maxVersion must be < 0.14 (i.e., 0.13.x)
+          major=$(echo "$MAX" | cut -d. -f1)
+          minor=$(echo "$MAX" | cut -d. -f2)
+          if [ "$major" -gt 0 ] || [ "$minor" -ge 14 ]; then
+            echo "FAIL: maxVersion $MAX is not < 0.14"
+            exit 1
+          fi
+          echo "PASS: maxVersion $MAX is < 0.14"

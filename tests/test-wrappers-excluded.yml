@@ -1,0 +1,45 @@
+name: Test wrappers directory is excluded from search
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # tests/terraform-aws-alb has:
+      #   versions.tf with: required_version = ">= 1.5.7"
+      #   wrappers/ subdirectory (should be excluded from search)
+      - id: action
+        uses: .
+        with:
+          directory: tests/terraform-aws-alb
+
+      - name: Assert minVersion is 1.5.7
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ "$MIN" != "1.5.7" ]; then
+            echo "FAIL: expected minVersion=1.5.7, got $MIN"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN (wrappers directory correctly excluded)"
+
+      - name: Assert maxVersion is set and >= 1.5.7
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          if ! printf '%s\n%s\n' "$MIN" "$MAX" | sort -V -C; then
+            echo "FAIL: maxVersion $MAX is less than minVersion $MIN"
+            exit 1
+          fi
+          echo "PASS: maxVersion $MAX >= minVersion $MIN"

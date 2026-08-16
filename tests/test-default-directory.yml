@@ -1,0 +1,51 @@
+name: Test default directory (current directory)
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create Terraform versions file in a subdirectory and run from there
+        run: |
+          mkdir -p tests/fixtures/default-dir
+          cat > tests/fixtures/default-dir/versions.tf << 'EOF'
+          terraform {
+            required_version = ">= 1.4.0, < 2.0.0"
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          directory: tests/fixtures/default-dir
+
+      - name: Assert minVersion is 1.4.0
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ "$MIN" != "1.4.0" ]; then
+            echo "FAIL: expected minVersion to be '1.4.0', got: $MIN"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set and greater than minVersion
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          LOWER=$(printf '%s\n%s\n' "$MIN" "$MAX" | sort -V | head -1)
+          if [ "$LOWER" != "$MIN" ]; then
+            echo "FAIL: expected minVersion ($MIN) <= maxVersion ($MAX)"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN, maxVersion=$MAX"

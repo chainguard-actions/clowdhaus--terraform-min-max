@@ -1,0 +1,62 @@
+name: Test pessimistic constraint operator
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create Terraform versions file with pessimistic constraint
+        run: |
+          mkdir -p tests/fixtures/pessimistic
+          cat > tests/fixtures/pessimistic/versions.tf << 'EOF'
+          terraform {
+            required_version = "~> 1.3.0"
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          directory: tests/fixtures/pessimistic
+
+      - name: Assert minVersion is set and non-empty
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set and non-empty
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion starts with 1.3 (pessimistic ~> 1.3.0 means >= 1.3.0, < 1.4.0)
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          # ~> 1.3.0 means >= 1.3.0, < 1.4.0 — so both min and max should be 1.3.x
+          if ! echo "$MIN" | grep -qE '^1\.3\.'; then
+            echo "FAIL: expected minVersion to start with 1.3.x, got: $MIN"
+            exit 1
+          fi
+          if ! echo "$MAX" | grep -qE '^1\.3\.'; then
+            echo "FAIL: expected maxVersion to start with 1.3.x, got: $MAX"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN, maxVersion=$MAX both in 1.3.x range"

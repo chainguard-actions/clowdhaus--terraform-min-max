@@ -1,0 +1,63 @@
+name: Test nested directory search
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create nested Terraform versions file
+        run: |
+          mkdir -p tests/fixtures/nested/modules/vpc
+          cat > tests/fixtures/nested/modules/vpc/versions.tf << 'EOF'
+          terraform {
+            required_version = ">= 1.5.0, < 1.9.0"
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          directory: tests/fixtures/nested
+
+      - name: Assert minVersion is set and non-empty
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty — action did not find nested versions.tf"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set and non-empty
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion and maxVersion are in expected range
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          # >= 1.5.0, < 1.9.0 — min should be 1.5.x, max should be 1.8.x or similar
+          if ! echo "$MIN" | grep -qE '^1\.(5|6|7|8)\.'; then
+            echo "FAIL: expected minVersion in 1.5.x-1.8.x range, got: $MIN"
+            exit 1
+          fi
+          LOWER=$(printf '%s\n%s\n' "$MIN" "$MAX" | sort -V | head -1)
+          if [ "$LOWER" != "$MIN" ]; then
+            echo "FAIL: expected minVersion ($MIN) <= maxVersion ($MAX)"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN, maxVersion=$MAX"
