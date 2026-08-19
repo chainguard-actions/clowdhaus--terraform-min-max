@@ -1,0 +1,100 @@
+name: Test range constraint - min and max differ
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create subdirectory with range constraint versions.tf
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tf-range"
+          cat > "$GITHUB_WORKSPACE/tf-range/versions.tf" <<'EOF'
+          terraform {
+            required_version = ">= 1.3.0, < 1.6.0"
+
+            required_providers {
+              aws = {
+                source  = "hashicorp/aws"
+                version = ">= 4.0"
+              }
+            }
+          }
+          EOF
+
+      - id: minmax
+        uses: .
+        with:
+          directory: 'tf-range'
+
+      - name: Assert minVersion is non-empty and semver
+        env:
+          MIN: ${{ steps.minmax.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          if ! echo "$MIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: minVersion '$MIN' does not look like a semver"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is non-empty and semver
+        env:
+          MAX: ${{ steps.minmax.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          if ! echo "$MAX" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: maxVersion '$MAX' does not look like a semver"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion is 1.3.x (satisfies >= 1.3.0)
+        env:
+          MIN: ${{ steps.minmax.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          MAJOR=$(echo "$MIN" | cut -d. -f1)
+          MINOR=$(echo "$MIN" | cut -d. -f2)
+          if [ "$MAJOR" != "1" ] || [ "$MINOR" != "3" ]; then
+            echo "FAIL: expected minVersion to be 1.3.x, got '$MIN'"
+            exit 1
+          fi
+          echo "PASS: minVersion $MIN is in 1.3.x range"
+
+      - name: Assert maxVersion is < 1.6.0
+        env:
+          MAX: ${{ steps.minmax.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          MAJOR=$(echo "$MAX" | cut -d. -f1)
+          MINOR=$(echo "$MAX" | cut -d. -f2)
+          # maxVersion must be < 1.6.0, so major=1 and minor <= 5
+          if [ "$MAJOR" != "1" ] || [ "$MINOR" -ge "6" ]; then
+            echo "FAIL: expected maxVersion < 1.6.0, got '$MAX'"
+            exit 1
+          fi
+          echo "PASS: maxVersion $MAX is < 1.6.0"
+
+      - name: Assert minVersion and maxVersion differ
+        env:
+          MIN: ${{ steps.minmax.outputs.minVersion }}
+          MAX: ${{ steps.minmax.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          if [ "$MIN" = "$MAX" ]; then
+            echo "FAIL: expected minVersion and maxVersion to differ for a range constraint"
+            exit 1
+          fi
+          echo "PASS: min=$MIN, max=$MAX differ as expected"

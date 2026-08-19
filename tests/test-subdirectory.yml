@@ -1,0 +1,81 @@
+name: Test subdirectory input
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create subdirectory with exact version constraint
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/tf-exact"
+          cat > "$GITHUB_WORKSPACE/tf-exact/versions.tf" <<'EOF'
+          terraform {
+            required_version = ">= 1.5.0, < 1.6.0"
+
+            required_providers {
+              aws = {
+                source  = "hashicorp/aws"
+                version = ">= 4.0"
+              }
+            }
+          }
+          EOF
+
+      - id: minmax
+        uses: .
+        with:
+          directory: 'tf-exact'
+
+      - name: Assert minVersion is non-empty
+        env:
+          MIN: ${{ steps.minmax.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          if ! echo "$MIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: minVersion '$MIN' does not look like a semver"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is non-empty
+        env:
+          MAX: ${{ steps.minmax.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          if ! echo "$MAX" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: maxVersion '$MAX' does not look like a semver"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert both versions are in 1.5.x range
+        env:
+          MIN: ${{ steps.minmax.outputs.minVersion }}
+          MAX: ${{ steps.minmax.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          MIN_MAJOR=$(echo "$MIN" | cut -d. -f1)
+          MIN_MINOR=$(echo "$MIN" | cut -d. -f2)
+          MAX_MAJOR=$(echo "$MAX" | cut -d. -f1)
+          MAX_MINOR=$(echo "$MAX" | cut -d. -f2)
+          if [ "$MIN_MAJOR" != "1" ] || [ "$MIN_MINOR" != "5" ]; then
+            echo "FAIL: expected minVersion to be 1.5.x, got '$MIN'"
+            exit 1
+          fi
+          if [ "$MAX_MAJOR" != "1" ] || [ "$MAX_MINOR" != "5" ]; then
+            echo "FAIL: expected maxVersion to be 1.5.x, got '$MAX'"
+            exit 1
+          fi
+          echo "PASS: both versions are in 1.5.x range: min=$MIN, max=$MAX"

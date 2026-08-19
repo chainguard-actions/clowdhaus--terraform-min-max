@@ -1,0 +1,76 @@
+name: Test basic usage - default directory
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create versions.tf in workspace root
+        run: |
+          cat > "$GITHUB_WORKSPACE/versions.tf" <<'EOF'
+          terraform {
+            required_version = ">= 1.0.0"
+
+            required_providers {
+              aws = {
+                source  = "hashicorp/aws"
+                version = ">= 4.0"
+              }
+            }
+          }
+          EOF
+
+      - id: minmax
+        uses: .
+        with:
+          directory: '.'
+
+      - name: Assert minVersion is non-empty
+        env:
+          MIN: ${{ steps.minmax.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          # Validate it looks like a semver (X.Y.Z)
+          if ! echo "$MIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: minVersion '$MIN' does not look like a semver"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is non-empty
+        env:
+          MAX: ${{ steps.minmax.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          # Validate it looks like a semver (X.Y.Z)
+          if ! echo "$MAX" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: maxVersion '$MAX' does not look like a semver"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion <= maxVersion
+        env:
+          MIN: ${{ steps.minmax.outputs.minVersion }}
+          MAX: ${{ steps.minmax.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          # Compare using sort -V (version sort)
+          LOWER=$(printf '%s\n%s\n' "$MIN" "$MAX" | sort -V | head -1)
+          if [ "$LOWER" != "$MIN" ]; then
+            echo "FAIL: minVersion '$MIN' is greater than maxVersion '$MAX'"
+            exit 1
+          fi
+          echo "PASS: $MIN <= $MAX"
