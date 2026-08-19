@@ -1,0 +1,73 @@
+name: Test basic usage - version range
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create Terraform fixture directory with version range
+        run: |
+          mkdir -p /tmp/tf-basic
+          cat > /tmp/tf-basic/main.tf <<'EOF'
+          terraform {
+            required_version = ">= 1.0.0, < 2.0.0"
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          directory: /tmp/tf-basic
+
+      - name: Assert minVersion is set and non-empty
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set and non-empty
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion is less than or equal to maxVersion
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          # Use sort -V to compare semver strings
+          LOWER=$(printf '%s\n%s\n' "$MIN" "$MAX" | sort -V | head -n1)
+          if [ "$LOWER" != "$MIN" ]; then
+            echo "FAIL: minVersion ($MIN) is not <= maxVersion ($MAX)"
+            exit 1
+          fi
+          echo "PASS: minVersion <= maxVersion"
+
+      - name: Assert maxVersion is below 2.0.0
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          # maxVersion should satisfy < 2.0.0
+          MAJOR=$(echo "$MAX" | cut -d. -f1)
+          if [ "$MAJOR" -ge 2 ]; then
+            echo "FAIL: maxVersion ($MAX) should be < 2.0.0"
+            exit 1
+          fi
+          echo "PASS: maxVersion is below 2.0.0"

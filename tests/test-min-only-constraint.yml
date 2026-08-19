@@ -1,0 +1,71 @@
+name: Test minimum-only version constraint
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create Terraform fixture with minimum-only constraint
+        run: |
+          mkdir -p /tmp/tf-min-only
+          cat > /tmp/tf-min-only/main.tf <<'EOF'
+          terraform {
+            required_version = ">= 1.5.0"
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          directory: /tmp/tf-min-only
+
+      - name: Assert minVersion is set and non-empty
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set and non-empty
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion is at least 1.5.0
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          LOWER=$(printf '%s\n1.5.0\n' "$MIN" | sort -V | head -n1)
+          if [ "$LOWER" != "1.5.0" ]; then
+            echo "FAIL: minVersion ($MIN) should be >= 1.5.0"
+            exit 1
+          fi
+          echo "PASS: minVersion >= 1.5.0"
+
+      - name: Assert maxVersion is greater than or equal to minVersion
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          echo "maxVersion: $MAX"
+          LOWER=$(printf '%s\n%s\n' "$MIN" "$MAX" | sort -V | head -n1)
+          if [ "$LOWER" != "$MIN" ]; then
+            echo "FAIL: maxVersion ($MAX) should be >= minVersion ($MIN)"
+            exit 1
+          fi
+          echo "PASS: maxVersion >= minVersion"

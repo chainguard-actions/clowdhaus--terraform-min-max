@@ -1,0 +1,69 @@
+name: Test tilde/pessimistic constraint operator
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create Terraform fixture with tilde constraint
+        run: |
+          mkdir -p /tmp/tf-tilde
+          cat > /tmp/tf-tilde/main.tf <<'EOF'
+          terraform {
+            required_version = "~> 1.5"
+          }
+          EOF
+
+      - id: action
+        uses: .
+        with:
+          directory: /tmp/tf-tilde
+
+      - name: Assert minVersion is set and non-empty
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          if [ -z "$MIN" ]; then
+            echo "FAIL: minVersion is empty"
+            exit 1
+          fi
+          echo "PASS: minVersion=$MIN"
+
+      - name: Assert maxVersion is set and non-empty
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          if [ -z "$MAX" ]; then
+            echo "FAIL: maxVersion is empty"
+            exit 1
+          fi
+          echo "PASS: maxVersion=$MAX"
+
+      - name: Assert minVersion is in the 1.x range
+        env:
+          MIN: ${{ steps.action.outputs.minVersion }}
+        run: |
+          echo "minVersion: $MIN"
+          MAJOR=$(echo "$MIN" | cut -d. -f1)
+          if [ "$MAJOR" != "1" ]; then
+            echo "FAIL: minVersion ($MIN) should be in the 1.x range"
+            exit 1
+          fi
+          echo "PASS: minVersion is in 1.x range"
+
+      - name: Assert maxVersion is in the 1.x range (tilde keeps major version)
+        env:
+          MAX: ${{ steps.action.outputs.maxVersion }}
+        run: |
+          echo "maxVersion: $MAX"
+          MAJOR=$(echo "$MAX" | cut -d. -f1)
+          if [ "$MAJOR" != "1" ]; then
+            echo "FAIL: maxVersion ($MAX) should be in the 1.x range for ~> 1.5"
+            exit 1
+          fi
+          echo "PASS: maxVersion is in 1.x range"

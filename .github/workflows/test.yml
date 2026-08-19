@@ -1,0 +1,73 @@
+name: test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  collectInputs:
+    name: Collect workflow inputs
+    runs-on: ubuntu-latest
+    outputs:
+      directories: ${{ steps.dirs.outputs.directories }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Get root directories
+        id: dirs
+        uses: clowdhaus/terraform-composite-actions/directories@8aef6513928e6e56c30662afb34a21bf4bf5d9f4 # v1.11.1
+
+  preCommit:
+    name: Pre-commit
+    needs: collectInputs
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: ${{ fromJson(needs.collectInputs.outputs.directories) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Terraform min/max versions
+        id: minMax
+        uses: ./
+        with:
+          directory: ${{ matrix.directory }}
+
+      # Min version
+      - name: Remove default Terraform
+        run: rm -rf $(which terraform)
+
+      - name: Install Terraform ${{ steps.minMax.outputs.minVersion }}
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: ${{ steps.minMax.outputs.minVersion }}
+
+      - name: Terraform validate ${{ steps.minMax.outputs.minVersion }}
+        working-directory: ${{ matrix.directory }}
+        run: |
+          terraform init
+          terraform validate
+
+      # Max version
+      - name: Remove min Terraform
+        run: rm -rf $(which terraform)
+
+      - name: Install Terraform ${{ steps.minMax.outputs.maxVersion }}
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: ${{ steps.minMax.outputs.maxVersion }}
+
+      - name: Terraform validate ${{ steps.minMax.outputs.maxVersion }}
+        working-directory: ${{ matrix.directory }}
+        run: |
+          terraform init
+          terraform validate
